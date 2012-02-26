@@ -2,6 +2,13 @@ import wx
 import math
 import cPickle
 
+import matplotlib
+matplotlib.use('WXAgg')
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_wxagg import \
+    FigureCanvasWxAgg as FigCanvas
+import pylab
+
 exit_MENU  = wx.NewId()
 about_MENU = wx.NewId()
 help_MENU  = wx.NewId()
@@ -184,7 +191,7 @@ class MyFrame(wx.Frame):
         self.last_menuPt = None
         self.components = []
         
-        self.plotPanel = wx.Panel(self.profile, -1, style=wx.BORDER_NONE | wx.FULL_REPAINT_ON_RESIZE)
+        self.plotPanel = wx.Window(self.profile, -1, style=wx.BORDER_NONE | wx.FULL_REPAINT_ON_RESIZE)
         self.plotPanel.Bind(wx.EVT_PAINT, self.onProfilePaint)
         self.plotPanel.SetBackgroundColour(wx.WHITE)
         self.plotPanel.SetSize([self.GetClientSize().x - 10, self.GetClientSize().y - 30])
@@ -216,7 +223,10 @@ class MyFrame(wx.Frame):
     
     def onProfilePaint(self, event):
         dc = wx.PaintDC(self.plotPanel)
-        
+        event.Skip(1) # hack!
+        self.drawCharts(dc)
+
+    def drawCharts(self, dc):        
         months = Months(self.components)
         min = months.getMinMonth()
         max = months.getMaxMonth()
@@ -231,41 +241,28 @@ class MyFrame(wx.Frame):
             lb = months.getMonthLabour(x)
             if self.abs(lb) > maxLB: maxLB = abs(lb)
             lbpts.append(lb)
-        self.plotPanel.PrepareDC(dc)
-        dc.BeginDrawing()
-        dc.DrawLine(10, self.plotPanel.GetClientSize().y-10, 10, 10)
-        dc.DrawLine(10, (self.plotPanel.GetClientSize().y-10)/2, self.plotPanel.GetClientSize().x-10, (self.plotPanel.GetClientSize().y-10)/2)
-        prevx = 10
-        prevy = (self.plotPanel.GetClientSize().y-10)/2
-        brevx = 10
-        brevy = (self.plotPanel.GetClientSize().y-10)/2
-        if maxFR < 1: maxFR = 1
-        if maxLB < 1: maxLB = 1
-        dc.SetTextBackground(wx.WHITE)
-        for i in xrange(0, len(frpts)):
-            dc.SetPen(wx.GREEN_PEN)
-            dc.DrawLine(prevx, prevy, \
-                        10+(i+1)*(self.plotPanel.GetClientSize().x-10)/len(frpts), \
-                        (self.plotPanel.GetClientSize().y-10)/2-(self.plotPanel.GetClientSize().y-20)*frpts[i]/2/maxFR)
-            prevx=10+(i+1)*(self.plotPanel.GetClientSize().x-10)/len(frpts)
-            prevy=(self.plotPanel.GetClientSize().y-10)/2-(self.plotPanel.GetClientSize().y-20)*frpts[i]/2/maxFR
-            dc.SetTextForeground(wx.RED)
-            dc.DrawText("%0.1f"%frpts[i], prevx - 30, prevy)
             
-            dc.SetPen(wx.CYAN_PEN)
-            dc.DrawLine(brevx, brevy, \
-                        10+(i+1)*(self.plotPanel.GetClientSize().x-10)/len(lbpts), \
-                        (self.plotPanel.GetClientSize().y-10)/2-(self.plotPanel.GetClientSize().y-20)*lbpts[i]/2/maxLB)
-            brevx=10+(i+1)*(self.plotPanel.GetClientSize().x-10)/len(lbpts)
-            brevy=(self.plotPanel.GetClientSize().y-10)/2-(self.plotPanel.GetClientSize().y-20)*lbpts[i]/2/maxLB
-            dc.SetTextForeground(wx.BLUE)
-            dc.DrawText("%0.1f"%lbpts[i], brevx - 30, brevy + 14)
+        fig = Figure((7.82, 4.98), 100)
+        canvas = FigCanvas(self.plotPanel, -1, fig)
+        
+        axes = fig.add_subplot(111)
+        axes.set_axis_bgcolor('white')
+        axes.set_title('Financial result/labour', size=12)
+        axes.grid(True, color='gray')
+        pylab.setp(axes.get_xticklabels(), fontsize=8)
+        pylab.setp(axes.get_yticklabels(), fontsize=8)
 
-            dc.SetTextForeground(wx.BLACK)
-            dc.DrawText(str(i), brevx, (self.plotPanel.GetClientSize().y-10)/2+2)
-            dc.SetPen(wx.BLACK_PEN)
-            dc.DrawLine(brevx, (self.plotPanel.GetClientSize().y-10)/2-2, brevx, (self.plotPanel.GetClientSize().y-10)/2+2)
-        dc.EndDrawing()
+        axes.plot(frpts, linewidth=1, color=(0.5, 0, 0), )
+        axlb = axes.twinx()
+        pylab.setp(axlb.get_yticklabels(), fontsize=8)
+        axlb.plot(lbpts, linewidth=1, color=(0, 0, 0.5), )
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(canvas, 1, flag=wx.LEFT | wx.TOP | wx.GROW)        
+        self.plotPanel.SetSizer(vbox)
+        vbox.Fit(self.plotPanel)
+
+        canvas.draw()
+        
         res = months.getFinResultAndROI()
         prob = months.getLossesProbability(res[0])
         if prob < 0.5:
@@ -562,7 +559,7 @@ class MyFrame(wx.Frame):
         imageSizer.Add(lab1, 0, wx.ALL | wx.ALIGN_CENTRE_VERTICAL, 5)
 
         lab2 = wx.StaticText(panel, -1, "A simple cost-profit profiling " + \
-                                       "program. Version 0.2")
+                                       "program. Version 0.3")
         lab2.SetFont(boldFont)
         lab2.SetSize(lab2.GetBestSize())
 
